@@ -85,28 +85,50 @@ struct FileView : View {
         
         let files = try! fm.contentsOfDirectory(atPath: dirCur)
 //        let urlFiles = files.map({ f in return URL(string: f)! })
+        let filepaths = files.map({ f in return dirCur + f})
         
-        return files
+        return filepaths
     }
     
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(getFiles(), id: \.self) { f in
+                    let fpaths = f.split(separator: "/")
+                    
                     if fm.isDirectory(atPath: f) {
                         Button {
+                            print(f)
                         } label: {
                             VStack {
                                 Image(nsImage: NSWorkspace.shared.icon(forFile: f))
-                                Text(f)
+                                Text(fpaths.last!)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
                         }.buttonStyle(.borderless)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .border(.pink)
                         .controlSize(.large)
+                        Text("Test").gesture(TapGesture(count:1).onEnded({
+                            print("Tap Displayed")}))
+                        .highPriorityGesture(TapGesture(count:2).onEnded({print("Double Tap Displayed")}))
                     } else {
-                        Label(f, systemImage: "doc")
+                        Button {
+                            print(f)
+                        } label: {
+                            VStack {
+                                Image(nsImage: NSWorkspace.shared.icon(forFile: f))
+                                Text(fpaths.last!)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        }.buttonStyle(.borderless)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .border(.pink)
+                        .controlSize(.large)
+                        .gesture(TapGesture(count:1).onEnded({
+                            print("Tap Displayed")}))
+                        .highPriorityGesture(TapGesture(count:2).onEnded({print("Double Tap Displayed")}))
+//                        Label(fpaths.last!, systemImage: "doc")
                     }
                 }
             }
