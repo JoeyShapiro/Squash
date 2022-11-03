@@ -7,6 +7,17 @@
 
 import SwiftUI
 
+extension FileManager {
+    func isDirectory(atPath: String) -> Bool {
+        var check: ObjCBool = false
+        if fileExists(atPath: atPath, isDirectory: &check) {
+            return check.boolValue
+        } else {
+            return false
+        }
+    }
+}
+
 struct ContentView: View {
     @State var pathCurrent: String = "/"
     
@@ -51,32 +62,51 @@ struct ContentView_Previews: PreviewProvider {
 }
 
 struct FileView : View {
+//    let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    let columns = [
+            GridItem(.adaptive(minimum: 80))
+        ]
     var path: String
     var contentView: ContentView
     
     let fm = FileManager.default // need to set directory here
 
     func getFiles() -> [String] {
-        contentView.pathCurrent = path
+        let url = URL(fileURLWithPath: path)
+        let cp = try! url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath
+        
+        contentView.pathCurrent = cp!
         
         // Get the document directory url
-        fm.changeCurrentDirectoryPath(path)
+        fm.changeCurrentDirectoryPath(cp!)
         var directories: [String] = [fm.currentDirectoryPath]
     
         let dirCur = directories.popLast()!
         
         let files = try! fm.contentsOfDirectory(atPath: dirCur)
-//        let urlFiles = files.map({ f in return URL(string: dirCur + "/" + f)! })
+//        let urlFiles = files.map({ f in return URL(string: f)! })
         
         return files
     }
     
     var body: some View {
-        VStack {
-            NavigationView {
-                List (getFiles(), id: \.self) { f in
-                    NavigationLink( destination: FileView(path: f, contentView: contentView)) {
-                        Label(f, systemImage: "folder")
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(getFiles(), id: \.self) { f in
+                    if fm.isDirectory(atPath: f) {
+                        Button {
+                        } label: {
+                            VStack {
+                                Image(nsImage: NSWorkspace.shared.icon(forFile: f))
+                                Text(f)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        }.buttonStyle(.borderless)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .border(.pink)
+                        .controlSize(.large)
+                    } else {
+                        Label(f, systemImage: "doc")
                     }
                 }
             }
