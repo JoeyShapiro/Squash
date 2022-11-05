@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+class Test : ObservableObject {
+    @Published var pressure = 0.0
+}
+
 extension FileManager {
     func isDirectory(atPath: String) -> Bool {
         var check: ObjCBool = false
@@ -18,7 +22,46 @@ extension FileManager {
     }
 }
 
+struct KeyEventHandling: NSViewRepresentable {
+    @EnvironmentObject var test: Test
+    
+    class KeyView: NSView {
+        var test: Test
+        override var acceptsFirstResponder: Bool { true }
+        
+        init(test: Test) {
+            self.test = test
+            super.init(frame: .zero)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func pressureChange(with event: NSEvent) {
+            if event.pressure == 1 { // i think this is force click
+                print("\(event.pressure)")
+                test.pressure = Double(event.pressure)
+            } else {
+                test.pressure = Double(event.pressure)
+            }
+        } // x-=-1
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = KeyView(test: test)
+        DispatchQueue.main.async { // wait till next event cycle
+            view.window?.makeFirstResponder(view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+    }
+}
+
 struct ContentView: View {
+    @StateObject var test = Test()
     @State var pathCurrent: String = "/"
     
     var body: some View {
@@ -51,7 +94,7 @@ struct ContentView: View {
                 }
             }
             Text(pathCurrent)
-        }
+        }.environmentObject(test)
     }
 }
 
@@ -68,6 +111,7 @@ struct FileView : View {
         ]
     var path: String
     var contentView: ContentView
+    @EnvironmentObject var test: Test
     
     let fm = FileManager.default // need to set directory here
 
@@ -112,6 +156,7 @@ struct FileView : View {
                         Text("Test").gesture(TapGesture(count:1).onEnded({
                             print("Tap Displayed")}))
                         .highPriorityGesture(TapGesture(count:2).onEnded({print("Double Tap Displayed")}))
+                        Text("testtest").gesture(LongPressGesture(minimumDuration: 1).onEnded({_ in print("force")})).background(KeyEventHandling().environmentObject(test))
                     } else {
                         Button {
                             print(f)
@@ -132,6 +177,7 @@ struct FileView : View {
                     }
                 }
             }
-        }
+            Text(String(test.pressure))
+        }.environmentObject(test)
     }
 }
