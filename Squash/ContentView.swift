@@ -71,12 +71,16 @@ struct ContentView: View {
                     List {
                         Text("Quick Access").font(.headline)
                         // root
-                        NavigationLink( destination: FileView(path: "/", contentView: self)) {
+                        NavigationLink( destination: FilesView(path: "/", contentView: self)) {
                             Label("Root", systemImage: "externaldrive")
                         }
                         // applications
-                        NavigationLink( destination: FileView(path: "/Applications", contentView: self)) {
+                        NavigationLink( destination: FilesView(path: "/Applications", contentView: self)) {
                             Label("Applications", systemImage: "externaldrive")
+                        }
+                        // This
+                        NavigationLink( destination: FilesView(path: ".", contentView: self)) {
+                            Label("Home", systemImage: "externaldrive")
                         }
                     }.listStyle(SidebarListStyle())
                     .navigationTitle("Quick Access")
@@ -104,80 +108,98 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
-struct FileView : View {
+struct FilesView : View {
 //    let columns = [GridItem(.flexible()), GridItem(.flexible())]
     let columns = [
             GridItem(.adaptive(minimum: 80))
         ]
-    var path: String
+    @State var path: String
     var contentView: ContentView
     @EnvironmentObject var test: Test
+    @State private var overWhat = ""
+    @State private var whatChosen = ""
+    @State private var filesToList: [String] = []
+    @State private var maxDepth: Int = 1
     
     let fm = FileManager.default // need to set directory here
 
-    func getFiles() -> [String] {
+    func getFiles() {
         let url = URL(fileURLWithPath: path)
         let cp = try! url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath
+        var depth = 0
         
         contentView.pathCurrent = cp!
         
         // Get the document directory url
         fm.changeCurrentDirectoryPath(cp!)
-        var directories: [String] = [fm.currentDirectoryPath]
-    
-        let dirCur = directories.popLast()!
+        var directories: [String] = [cp!]
         
-        let files = try! fm.contentsOfDirectory(atPath: dirCur)
-//        let urlFiles = files.map({ f in return URL(string: f)! })
-        let filepaths = files.map({ f in return dirCur + f})
+        while !directories.isEmpty && depth <= maxDepth {
+            let dirCur = directories.popLast()!
+            print(dirCur)
+            
+            do {
+                let files = try fm.contentsOfDirectory(atPath: dirCur)
+                //        let urlFiles = files.map({ f in return URL(string: f)! })
+                let filepaths = files.map({ f in return dirCur + f})
+                
+                directories.append(contentsOf: filepaths.filter { fm.isDirectory(atPath: $0) })
+                
+                print(filesToList.count)
+                filesToList.append(contentsOf: filepaths)
+                depth -= -1
+            } catch {
+                print(error)
+            }
+        }
         
-        return filepaths
+        print(filesToList.count)
     }
     
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(getFiles(), id: \.self) { f in
+                ForEach(filesToList, id: \.self) { f in
                     let fpaths = f.split(separator: "/")
-                    
-                    if fm.isDirectory(atPath: f) {
-                        Button {
-                            print(f)
-                        } label: {
-                            VStack {
-                                Image(nsImage: NSWorkspace.shared.icon(forFile: f))
-                                Text(fpaths.last!)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        }.buttonStyle(.borderless)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .border(.pink)
-                        .controlSize(.large)
-                        Text("Test").gesture(TapGesture(count:1).onEnded({
-                            print("Tap Displayed")}))
-                        .highPriorityGesture(TapGesture(count:2).onEnded({print("Double Tap Displayed")}))
-                        Text("testtest").gesture(LongPressGesture(minimumDuration: 1).onEnded({_ in print("force")})).background(KeyEventHandling().environmentObject(test))
-                    } else {
-                        Button {
-                            print(f)
-                        } label: {
-                            VStack {
-                                Image(nsImage: NSWorkspace.shared.icon(forFile: f))
-                                Text(fpaths.last!)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        }.buttonStyle(.borderless)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .border(.pink)
-                        .controlSize(.large)
-                        .gesture(TapGesture(count:1).onEnded({
-                            print("Tap Displayed")}))
-                        .highPriorityGesture(TapGesture(count:2).onEnded({print("Double Tap Displayed")}))
-//                        Label(fpaths.last!, systemImage: "doc")
+                    VStack {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: f))
+                        Text(fpaths.last!)//.foregroundColor(overWhat == fpaths.last! ? .green : .red)
                     }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding()
+                        .overlay(overWhat == fpaths.last! ?
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(.green.opacity(0.5), lineWidth: 5)
+                                 :
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(.green.opacity(0.0), lineWidth: 5)
+                        )
+                        .gesture(TapGesture(count:1).onEnded({
+                            print("Tap Displayed")
+                            
+                        }))
+                        .highPriorityGesture(TapGesture(count:2).onEnded({
+                            print("Double Tap Displayed")
+                            whatChosen = f
+                            if fm.isDirectory(atPath: f) {
+                                path = f
+                                filesToList.removeAll()
+                                getFiles()
+                            } else {
+                                print(f)
+                            }
+                        }))
+                        .background(KeyEventHandling().environmentObject(test))
+                        .onHover { isOver in
+                            if isOver {
+                                overWhat = String(fpaths.last!)
+                            } else {
+                                overWhat = ""
+                            }
+                        }
                 }
             }
             Text(String(test.pressure))
-        }.environmentObject(test)
+        }.onAppear(perform: {getFiles()}).environmentObject(test)
     }
 }
