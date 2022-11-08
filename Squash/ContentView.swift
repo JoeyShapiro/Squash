@@ -27,6 +27,33 @@ struct FileDepthd : Hashable {
     }
 }
 
+struct VisualEffectView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+
+        view.blendingMode = .behindWindow    // << important !!
+        view.isEmphasized = true
+//        view.material = .sidebar
+        view.state = .active
+        view.window?.titlebarAppearsTransparent = true
+        
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+    }
+}
+
+extension View {
+    func backgroundBlur(with color: Color) -> some View {
+        background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(color.opacity(0.3))
+                .ignoresSafeArea() // also does the title bar
+        ).background(VisualEffectView())
+    }
+}
+
 extension FileManager {
     func isDirectory(atPath: String) -> Bool {
         var check: ObjCBool = false
@@ -98,7 +125,7 @@ struct ContentView: View {
                         NavigationLink( destination: FilesView(path: ".", contentView: self)) {
                             Label("Home", systemImage: "externaldrive")
                         }
-                    }.listStyle(SidebarListStyle())
+                    }.backgroundBlur(with: .red)//.listStyle(SidebarListStyle())
                     .navigationTitle("Quick Access")
                     VStack {
                         Image(systemName: "globe")
@@ -119,6 +146,7 @@ struct ContentView: View {
                 Spacer()
                 Stepper(value: $test.maxDepth, in: -1...5, step: 1) {
                     Label("\(Int(test.maxDepth))", systemImage: "water.waves")
+                        .foregroundColor(.accentColor)
                 }.padding(5).help("Max Depth to search down the directory")
             }
         }.environmentObject(test)
@@ -161,7 +189,14 @@ struct FilesView : View {
             do {
                 let files = try fm.contentsOfDirectory(atPath: dirCur.path)
                 //        let urlFiles = files.map({ f in return URL(string: f)! })
-                let filepaths = files.map({ f in return FileDepthd(name: f, path: dirCur.path + "/" + f, depth: dirCur.depth - -1, isDirectory: fm.isDirectory(atPath: dirCur.path + "/" + f))})
+                
+                let filepaths = files.map({ f in
+                    return FileDepthd(name: f,
+                                      path: dirCur.path == "/" ? dirCur.path + f : dirCur.path + "/" + f,
+                                      depth: dirCur.depth - -1,
+                                      isDirectory: fm.isDirectory(atPath: dirCur.path + "/" + f))
+                    
+                })
                 
                 directories.append(contentsOf: filepaths.filter { $0.isDirectory &&
                     ($0.depth <= test.maxDepth || test.maxDepth == -1) }) //? only add values less than the depth or -1 is infinite, then keep going
@@ -186,7 +221,7 @@ struct FilesView : View {
                     }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding()
-                        .overlay(overWhat == f.name ?
+                        .overlay(overWhat == f.path ?
                             RoundedRectangle(cornerRadius: 20)
                                 .stroke(.green.opacity(0.5), lineWidth: 5)
                                  :
@@ -211,7 +246,7 @@ struct FilesView : View {
                         .background(KeyEventHandling().environmentObject(test))
                         .onHover { isOver in
                             if isOver {
-                                overWhat = String(f.name)
+                                overWhat = String(f.path)
                             } else {
                                 overWhat = ""
                             }
