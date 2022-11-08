@@ -115,11 +115,11 @@ struct ContentView: View {
             }
             Divider()
             HStack {
-                Text("Path: \(pathCurrent)")
+                Text("Path: \(pathCurrent)").help("Path of the current directory")
                 Spacer()
                 Stepper(value: $test.maxDepth, in: -1...5, step: 1) {
-                    Label("Max Depth: \(Int(test.maxDepth))", systemImage: "water.waves")
-                }.padding(5)
+                    Label("\(Int(test.maxDepth))", systemImage: "water.waves")
+                }.padding(5).help("Max Depth to search down the directory")
             }
         }.environmentObject(test)
     }
@@ -181,7 +181,7 @@ struct FilesView : View {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(filesToList, id: \.self) { f in
                     VStack {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: f.path))
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: f.path)).colorMultiply(.white.opacity(1.0 / Double(f.depth)))
                         Text(f.name)//.foregroundColor(overWhat == fpaths.last! ? .green : .red)
                     }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
