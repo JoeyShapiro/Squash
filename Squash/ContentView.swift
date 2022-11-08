@@ -27,6 +27,15 @@ struct FileDepthd : Hashable {
     }
 }
 
+func getPathComponents(at: String) -> [String] {
+    // break up the path into its components
+    var ancestors = at.split(separator: "/")
+    // prepend the root folder
+    ancestors.insert("/", at: 0)
+    
+    return ancestors.map { String($0) } // return a string version (why is substring a thing)
+}
+
 struct VisualEffectView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
@@ -119,11 +128,19 @@ struct ContentView: View {
                         }
                         // applications
                         NavigationLink( destination: FilesView(path: "/Applications", contentView: self)) {
-                            Label("Applications", systemImage: "externaldrive")
+                            Label("Applications", systemImage: "compass.drawing")
                         }
                         // This
                         NavigationLink( destination: FilesView(path: ".", contentView: self)) {
-                            Label("Home", systemImage: "externaldrive")
+                            Label("Home", systemImage: "house")
+                        }
+                        // documents
+                        NavigationLink( destination: FilesView(path: "/Users/\(NSUserName())/documents", contentView: self)) {
+                            Label {
+                                Text("Documents")
+                            } icon: {
+                                Image(systemName: "doc.richtext").foregroundColor(.accentColor)
+                            }
                         }
                     }.backgroundBlur(with: .red)//.listStyle(SidebarListStyle())
                     .navigationTitle("Quick Access")
@@ -142,13 +159,26 @@ struct ContentView: View {
             }
             Divider()
             HStack {
-                Text("Path: \(pathCurrent)").help("Path of the current directory")
+                Label {
+                    HStack {
+                        ForEach(getPathComponents(at: pathCurrent), id: \.self) { d in
+                            Button(d, action: {
+                                print(d)
+                            })
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "list.bullet.indent").foregroundColor(.accentColor)
+                }.help("Path of the current directory")
                 Spacer()
                 Stepper(value: $test.maxDepth, in: -1...5, step: 1) {
-                    Label("\(Int(test.maxDepth))", systemImage: "water.waves")
-                        .foregroundColor(.accentColor)
-                }.padding(5).help("Max Depth to search down the directory")
-            }
+                    Label {
+                        Text("\(Int(test.maxDepth))")
+                    } icon: {
+                        Image(systemName: "water.waves").foregroundColor(.accentColor)
+                    }
+                }.help("Max Depth to search down the directory")
+            }.padding(5)
         }.environmentObject(test)
     }
 }
@@ -216,7 +246,9 @@ struct FilesView : View {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(filesToList, id: \.self) { f in
                     VStack {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: f.path)).colorMultiply(.white.opacity(1.0 / Double(f.depth)))
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: f.path))
+                            .colorMultiply(.white.opacity(1.0 / Double(f.depth)))
+                            .opacity(f.name.starts(with: ".") ? 0.2 : 1.0)
                         Text(f.name)//.foregroundColor(overWhat == fpaths.last! ? .green : .red)
                     }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -230,7 +262,6 @@ struct FilesView : View {
                         )
                         .gesture(TapGesture(count:1).onEnded({
                             print("Tap Displayed")
-                            
                         }))
                         .highPriorityGesture(TapGesture(count:2).onEnded({
                             print("Double Tap Displayed")
@@ -241,16 +272,34 @@ struct FilesView : View {
                                 getFiles()
                             } else {
                                 print(f)
+                                let task = Process()
+                                task.executableURL = URL(fileURLWithPath: "/Applications/Visual Studio Code - Insiders.app")
+                                task.arguments = [f.path]
+                                do {
+                                    try task.run()
+                                } catch {
+                                    print(error)
+                                }
+                                
+                                let outputPipe = Pipe()
+                                let errorPipe = Pipe()
+
+                                task.standardOutput = outputPipe
+                                task.standardError = errorPipe
+                                
+                                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                                
+                                let output = String(decoding: outputData, as: UTF8.self)
+                                let error = String(decoding: errorData, as: UTF8.self)
+                                
+                                print(output)
+                                print(error)
                             }
                         }))
                         .background(KeyEventHandling().environmentObject(test))
-                        .onHover { isOver in
-                            if isOver {
-                                overWhat = String(f.path)
-                            } else {
-                                overWhat = ""
-                            }
-                        }.help("Path: \(f.path)\nDepth: \(f.depth)")
+                        .onHover { isOver in overWhat = isOver ? f.path : "" }
+                        .help("Path: \(f.path)\nDepth: \(f.depth)")
                 }
             }
             Text(String(test.pressure))
