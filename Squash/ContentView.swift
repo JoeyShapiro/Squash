@@ -9,6 +9,22 @@ import SwiftUI
 
 class Test : ObservableObject {
     @Published var pressure = 0.0
+    @Published var maxDepth = 1
+}
+
+struct FileDepthd : Hashable {
+    var name: String
+    var path: String
+    var depth: Int
+    var isDirectory: Bool
+    
+//    var hashValue: Int {
+//        return path.hashValue
+//    }
+    
+    static func == (lhs: FileDepthd, rhs: FileDepthd) -> Bool {
+        return lhs.name == rhs.name && lhs.path == rhs.path && lhs.depth == rhs.depth && lhs.isDirectory == rhs.isDirectory
+    }
 }
 
 extension FileManager {
@@ -97,7 +113,14 @@ struct ContentView: View {
                     }
                 }
             }
-            Text(pathCurrent)
+            Divider()
+            HStack {
+                Text("Path: \(pathCurrent)")
+                Spacer()
+                Stepper(value: $test.maxDepth, in: -1...5, step: 1) {
+                    Label("Max Depth: \(Int(test.maxDepth))", systemImage: "water.waves")
+                }.padding(5)
+            }
         }.environmentObject(test)
     }
 }
@@ -118,36 +141,33 @@ struct FilesView : View {
     @EnvironmentObject var test: Test
     @State private var overWhat = ""
     @State private var whatChosen = ""
-    @State private var filesToList: [String] = []
-    @State private var maxDepth: Int = 1
+    @State private var filesToList: [FileDepthd] = []
     
     let fm = FileManager.default // need to set directory here
 
     func getFiles() {
         let url = URL(fileURLWithPath: path)
         let cp = try! url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath
-        var depth = 0
         
         contentView.pathCurrent = cp!
         
         // Get the document directory url
         fm.changeCurrentDirectoryPath(cp!)
-        var directories: [String] = [cp!]
+        var directories: [FileDepthd] = [FileDepthd(name: "", path: cp!, depth: 0, isDirectory: true)] // we should first add the children, but that is a lot of extra work. cant find good way then to have children be depth 0
         
-        while !directories.isEmpty && depth <= maxDepth {
-            let dirCur = directories.popLast()!
-            print(dirCur)
+        while !directories.isEmpty {
+            let dirCur = directories.removeFirst() // queue
             
             do {
-                let files = try fm.contentsOfDirectory(atPath: dirCur)
+                let files = try fm.contentsOfDirectory(atPath: dirCur.path)
                 //        let urlFiles = files.map({ f in return URL(string: f)! })
-                let filepaths = files.map({ f in return dirCur + f})
+                let filepaths = files.map({ f in return FileDepthd(name: f, path: dirCur.path + "/" + f, depth: dirCur.depth - -1, isDirectory: fm.isDirectory(atPath: dirCur.path + "/" + f))})
                 
-                directories.append(contentsOf: filepaths.filter { fm.isDirectory(atPath: $0) })
+                directories.append(contentsOf: filepaths.filter { $0.isDirectory &&
+                    ($0.depth <= test.maxDepth || test.maxDepth == -1) }) //? only add values less than the depth or -1 is infinite, then keep going
                 
                 print(filesToList.count)
                 filesToList.append(contentsOf: filepaths)
-                depth -= -1
             } catch {
                 print(error)
             }
@@ -160,14 +180,13 @@ struct FilesView : View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(filesToList, id: \.self) { f in
-                    let fpaths = f.split(separator: "/")
                     VStack {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: f))
-                        Text(fpaths.last!)//.foregroundColor(overWhat == fpaths.last! ? .green : .red)
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: f.path))
+                        Text(f.name)//.foregroundColor(overWhat == fpaths.last! ? .green : .red)
                     }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding()
-                        .overlay(overWhat == fpaths.last! ?
+                        .overlay(overWhat == f.name ?
                             RoundedRectangle(cornerRadius: 20)
                                 .stroke(.green.opacity(0.5), lineWidth: 5)
                                  :
@@ -180,9 +199,9 @@ struct FilesView : View {
                         }))
                         .highPriorityGesture(TapGesture(count:2).onEnded({
                             print("Double Tap Displayed")
-                            whatChosen = f
-                            if fm.isDirectory(atPath: f) {
-                                path = f
+                            whatChosen = f.path
+                            if f.isDirectory {
+                                path = f.path
                                 filesToList.removeAll()
                                 getFiles()
                             } else {
@@ -192,11 +211,11 @@ struct FilesView : View {
                         .background(KeyEventHandling().environmentObject(test))
                         .onHover { isOver in
                             if isOver {
-                                overWhat = String(fpaths.last!)
+                                overWhat = String(f.name)
                             } else {
                                 overWhat = ""
                             }
-                        }
+                        }.help("Path: \(f.path)\nDepth: \(f.depth)")
                 }
             }
             Text(String(test.pressure))
